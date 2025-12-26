@@ -2,131 +2,93 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
+<title>Lector de QR – Asistencia</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Reproductor Mario con Captcha</title>
-
-<!-- Google reCAPTCHA v2 -->
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
 
 <style>
   body {
-    background: #101820;
-    color: #f0f0f0;
     font-family: Arial, sans-serif;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
-  }
-  .player {
-    background: #1a2634;
-    padding: 20px;
-    border-radius: 12px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.4);
-    width: 300px;
     text-align: center;
+    background: #111;
+    color: #fff;
   }
-  h2 {
-    color: #ffcc00;
-    margin-bottom: 10px;
+  #reader {
+    width: 300px;
+    margin: 20px auto;
   }
-  button {
-    background: #ffcc00;
-    color: #000;
-    border: none;
-    padding: 10px 20px;
-    margin: 8px;
-    border-radius: 6px;
-    cursor: pointer;
+  .ok {
+    color: #00ff88;
     font-weight: bold;
   }
-  button:hover {
-    background: #ffdd33;
-  }
-  input[type="range"] {
-    width: 100%;
-  }
-  #overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.7);
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-  .captcha-box {
-    background: #fff;
-    color: #000;
-    padding: 20px;
-    border-radius: 10px;
-    text-align: center;
+  .error {
+    color: #ff5555;
+    font-weight: bold;
   }
 </style>
 </head>
 <body>
 
-<div class="player">
-  <h2>Mario Theme</h2>
-  <audio id="audio" src="mario.mp3" preload="metadata"></audio>
-  <div>
-    <button id="playBtn">Reproducir ▶</button>
-  </div>
+<h2>📷 Registro de Asistencia</h2>
+<p>Escanea el QR del gafete</p>
 
-  <p id="volText">Volumen: 50%</p>
-  <input type="range" id="volSlider" min="0" max="100" step="1" value="50">
-</div>
+<div id="reader"></div>
+<p id="resultado"></p>
 
-<!-- Overlay Captcha -->
-<div id="overlay">
-  <div class="captcha-box">
-    <h3>Verifica que no eres un robot</h3>
-    <div class="g-recaptcha" data-sitekey="6LeE1PMrAAAAAPYbA0r24Cir4fr7AVucQoT8-3AX" data-callback="captchaSuccess"></div>
-    <p style="font-size:12px;color:#555;margin-top:10px;">Resuelve el captcha para aplicar el cambio de volumen</p>
-  </div>
-</div>
+<!-- Lector QR -->
+<script src="https://unpkg.com/html5-qrcode"></script>
 
-<script>
-  const audio = document.getElementById('audio');
-  const playBtn = document.getElementById('playBtn');
-  const volSlider = document.getElementById('volSlider');
-  const volText = document.getElementById('volText');
-  const overlay = document.getElementById('overlay');
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
-  let pendingVolume = null;
+/* 🔑 Firebase */
+const firebaseConfig = {
+  apiKey: "AIzaSyDqyTJMHpPVeoQuV1xFFPWPCxkZpaQiGv0",
+  authDomain: "proyecto-asistencia-4b6ba.firebaseapp.com",
+  projectId: "proyecto-asistencia-4b6ba",
+  storageBucket: "proyecto-asistencia-4b6ba.firebasestorage.app",
+  messagingSenderId: "185333223533",
+  appId: "1:185333223533:web:fcf2472f517c4a6dfdaf64"
+};
 
-  // Volumen inicial
-  audio.volume = 0.5;
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
 
-  // Play/pause
-  playBtn.addEventListener('click', () => {
-    if (audio.paused) {
-      audio.play();
-      playBtn.textContent = 'Pausar ⏸';
-    } else {
-      audio.pause();
-      playBtn.textContent = 'Reproducir ▶';
+const resultado = document.getElementById("resultado");
+
+/* 📸 Inicializar lector QR */
+const qr = new Html5Qrcode("reader");
+
+qr.start(
+  { facingMode: "environment" },
+  {
+    fps: 10,
+    qrbox: 250
+  },
+  async (decodedText) => {
+    qr.pause(); // ⛔ evitar múltiples lecturas
+
+    try {
+      const ref = doc(db, "usuarios", decodedText);
+      await updateDoc(ref, {
+        asistencia: true,
+        fechaAsistencia: new Date()
+      });
+
+      resultado.innerHTML = `✅ Asistencia registrada<br>ID: ${decodedText}`;
+      resultado.className = "ok";
+    } catch (e) {
+      resultado.innerHTML = "❌ Error al registrar asistencia";
+      resultado.className = "error";
     }
-  });
 
-  // Captura movimiento del slider
-  volSlider.addEventListener('input', (e) => {
-    const newValue = parseInt(e.target.value);
-    pendingVolume = newValue;
-    overlay.style.display = 'flex';
-  });
+    setTimeout(() => {
+      resultado.innerHTML = "";
+      qr.resume();
+    }, 2000);
+  }
+);
 
-  // Función llamada automáticamente por reCAPTCHA si es correcto
-  window.captchaSuccess = function() {
-    if (pendingVolume !== null) {
-      const volume = pendingVolume / 100;
-      audio.volume = volume;
-      volText.textContent = `Volumen: ${pendingVolume}%`;
-      pendingVolume = null;
-    }
-    overlay.style.display = 'none';
-    grecaptcha.reset();
-  };
 </script>
 
 </body>
