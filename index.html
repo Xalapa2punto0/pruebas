@@ -8,15 +8,19 @@
 <style>
   body {
     font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
-    text-align: center;
     background: #000;
     color: #fff;
     margin: 0;
-    padding: 0;
+    text-align: center;
   }
 
   h2 {
-    margin-top: 14px;
+    margin: 14px 0 4px;
+  }
+
+  p {
+    margin: 0 0 10px;
+    opacity: 0.85;
   }
 
   #reader {
@@ -27,9 +31,9 @@
   }
 
   #resultado {
-    margin-top: 12px;
+    min-height: 42px;
+    margin-top: 10px;
     font-size: 1.1rem;
-    min-height: 40px;
   }
 
   .ok {
@@ -73,8 +77,8 @@ const db = getFirestore(app);
 
 const resultado = document.getElementById("resultado");
 
-let ultimoQR = null;
 let bloqueo = false;
+let ultimoQR = null;
 
 /* 📸 Inicializar lector */
 const qr = new Html5Qrcode("reader");
@@ -83,14 +87,12 @@ qr.start(
   { facingMode: "environment" },
   {
     fps: 15,
-    qrbox: { width: 300, height: 300 },
-    aspectRatio: 1.0,
+    qrbox: { width: 320, height: 320 },
+    aspectRatio: 1,
     disableFlip: false
   },
   async (decodedText) => {
     if (bloqueo) return;
-
-    // Evitar múltiples lecturas del mismo QR
     if (decodedText === ultimoQR) return;
 
     bloqueo = true;
@@ -111,23 +113,16 @@ qr.start(
       resultado.className = "error";
     }
 
-    // Liberar lectura después de 1.5s
+    // Liberar lectura tras pequeño delay (como iOS)
     setTimeout(() => {
       resultado.textContent = "";
       bloqueo = false;
     }, 1500);
   },
-  (error) => {
-    // Silenciar errores de frame (normal)
+  () => {
+    // Ignorar errores de frame (normal)
   }
 );
-
-/* 🧠 iOS Fix: reintento si Safari bloquea cámara */
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible") {
-    qr.resume?.();
-  }
-});
 </script>
 
 </body>
