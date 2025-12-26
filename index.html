@@ -2,127 +2,91 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<title>Lector de QR – Asistencia</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Asistencia QR</title>
 
 <style>
   body {
-    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    margin: 0;
     background: #000;
     color: #fff;
-    margin: 0;
+    font-family: system-ui, -apple-system;
     text-align: center;
   }
 
-  h2 {
-    margin: 14px 0 4px;
-  }
-
-  p {
-    margin: 0 0 10px;
-    opacity: 0.85;
-  }
+  h2 { margin: 10px 0 4px; }
+  p { margin: 0 0 10px; opacity: .8; }
 
   #reader {
     width: 100vw;
-    height: 70vh;
-    margin: 0 auto;
-    overflow: hidden;
+    height: 75vh;
   }
 
-  #resultado {
-    min-height: 42px;
-    margin-top: 10px;
-    font-size: 1.1rem;
+  #status {
+    height: 42px;
+    font-size: 1.2rem;
   }
 
-  .ok {
-    color: #00ff88;
-    font-weight: bold;
-  }
-
-  .error {
-    color: #ff5555;
-    font-weight: bold;
-  }
+  .ok { color: #00ff88; }
+  .error { color: #ff5555; }
 </style>
 </head>
 <body>
 
 <h2>📷 Registro de Asistencia</h2>
-<p>Coloca el QR dentro del recuadro</p>
+<p>Escanea el QR del gafete</p>
 
 <div id="reader"></div>
-<div id="resultado"></div>
+<div id="status"></div>
 
-<!-- html5-qrcode -->
+<!-- Firebase compat (más estable en Safari) -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<!-- QR -->
 <script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+<script>
+  firebase.initializeApp({
+    apiKey: "AIzaSyDqyTJMHpPVeoQuV1xFFPWPCxkZpaQiGv0",
+    authDomain: "proyecto-asistencia-4b6ba.firebaseapp.com",
+    projectId: "proyecto-asistencia-4b6ba"
+  });
 
-/* 🔑 Firebase */
-const firebaseConfig = {
-  apiKey: "AIzaSyDqyTJMHpPVeoQuV1xFFPWPCxkZpaQiGv0",
-  authDomain: "proyecto-asistencia-4b6ba.firebaseapp.com",
-  projectId: "proyecto-asistencia-4b6ba",
-  storageBucket: "proyecto-asistencia-4b6ba.firebasestorage.app",
-  messagingSenderId: "185333223533",
-  appId: "1:185333223533:web:fcf2472f517c4a6dfdaf64"
-};
+  const db = firebase.firestore();
+  const status = document.getElementById("status");
 
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
+  let bloqueado = false;
 
-const resultado = document.getElementById("resultado");
+  const qr = new Html5Qrcode("reader");
 
-let bloqueo = false;
-let ultimoQR = null;
+  qr.start(
+    { facingMode: "environment" },
+    { fps: 10, qrbox: 260 },
+    async (id) => {
+      if (bloqueado) return;
+      bloqueado = true;
 
-/* 📸 Inicializar lector */
-const qr = new Html5Qrcode("reader");
+      try {
+        await db.collection("usuarios").doc(id).update({
+          asistencia: true,
+          fechaAsistencia: firebase.firestore.FieldValue.serverTimestamp()
+        });
 
-qr.start(
-  { facingMode: "environment" },
-  {
-    fps: 15,
-    qrbox: { width: 320, height: 320 },
-    aspectRatio: 1,
-    disableFlip: false
-  },
-  async (decodedText) => {
-    if (bloqueo) return;
-    if (decodedText === ultimoQR) return;
+        status.textContent = "✅ Asistencia registrada";
+        status.className = "ok";
+        navigator.vibrate?.(100);
+      } catch (e) {
+        status.textContent = "❌ QR no válido";
+        status.className = "error";
+      }
 
-    bloqueo = true;
-    ultimoQR = decodedText;
-
-    try {
-      const ref = doc(db, "usuarios", decodedText);
-      await updateDoc(ref, {
-        asistencia: true,
-        fechaAsistencia: serverTimestamp()
-      });
-
-      resultado.textContent = "✅ Asistencia registrada";
-      resultado.className = "ok";
-    } catch (e) {
-      console.error(e);
-      resultado.textContent = "❌ Error al registrar asistencia";
-      resultado.className = "error";
+      setTimeout(() => {
+        status.textContent = "";
+        bloqueado = false;
+      }, 1500);
     }
-
-    // Liberar lectura tras pequeño delay (como iOS)
-    setTimeout(() => {
-      resultado.textContent = "";
-      bloqueo = false;
-    }, 1500);
-  },
-  () => {
-    // Ignorar errores de frame (normal)
-  }
-);
+  );
 </script>
 
 </body>
