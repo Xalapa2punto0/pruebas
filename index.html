@@ -7,19 +7,36 @@
 
 <style>
   body {
-    font-family: Arial, sans-serif;
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     text-align: center;
-    background: #111;
+    background: #000;
     color: #fff;
+    margin: 0;
+    padding: 0;
   }
+
+  h2 {
+    margin-top: 14px;
+  }
+
   #reader {
-    width: 300px;
-    margin: 20px auto;
+    width: 100vw;
+    height: 70vh;
+    margin: 0 auto;
+    overflow: hidden;
   }
+
+  #resultado {
+    margin-top: 12px;
+    font-size: 1.1rem;
+    min-height: 40px;
+  }
+
   .ok {
     color: #00ff88;
     font-weight: bold;
   }
+
   .error {
     color: #ff5555;
     font-weight: bold;
@@ -29,17 +46,17 @@
 <body>
 
 <h2>📷 Registro de Asistencia</h2>
-<p>Escanea el QR del gafete</p>
+<p>Coloca el QR dentro del recuadro</p>
 
 <div id="reader"></div>
-<p id="resultado"></p>
+<div id="resultado"></div>
 
-<!-- Lector QR -->
-<script src="https://unpkg.com/html5-qrcode"></script>
+<!-- html5-qrcode -->
+<script src="https://unpkg.com/html5-qrcode@2.3.8"></script>
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getFirestore, doc, updateDoc } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, doc, updateDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 /* 🔑 Firebase */
 const firebaseConfig = {
@@ -56,39 +73,61 @@ const db = getFirestore(app);
 
 const resultado = document.getElementById("resultado");
 
-/* 📸 Inicializar lector QR */
+let ultimoQR = null;
+let bloqueo = false;
+
+/* 📸 Inicializar lector */
 const qr = new Html5Qrcode("reader");
 
 qr.start(
   { facingMode: "environment" },
   {
-    fps: 10,
-    qrbox: 250
+    fps: 15,
+    qrbox: { width: 300, height: 300 },
+    aspectRatio: 1.0,
+    disableFlip: false
   },
   async (decodedText) => {
-    qr.pause(); // ⛔ evitar múltiples lecturas
+    if (bloqueo) return;
+
+    // Evitar múltiples lecturas del mismo QR
+    if (decodedText === ultimoQR) return;
+
+    bloqueo = true;
+    ultimoQR = decodedText;
 
     try {
       const ref = doc(db, "usuarios", decodedText);
       await updateDoc(ref, {
         asistencia: true,
-        fechaAsistencia: new Date()
+        fechaAsistencia: serverTimestamp()
       });
 
-      resultado.innerHTML = `✅ Asistencia registrada<br>ID: ${decodedText}`;
+      resultado.textContent = "✅ Asistencia registrada";
       resultado.className = "ok";
     } catch (e) {
-      resultado.innerHTML = "❌ Error al registrar asistencia";
+      console.error(e);
+      resultado.textContent = "❌ Error al registrar asistencia";
       resultado.className = "error";
     }
 
+    // Liberar lectura después de 1.5s
     setTimeout(() => {
-      resultado.innerHTML = "";
-      qr.resume();
-    }, 2000);
+      resultado.textContent = "";
+      bloqueo = false;
+    }, 1500);
+  },
+  (error) => {
+    // Silenciar errores de frame (normal)
   }
 );
 
+/* 🧠 iOS Fix: reintento si Safari bloquea cámara */
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    qr.resume?.();
+  }
+});
 </script>
 
 </body>
